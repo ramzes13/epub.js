@@ -75,17 +75,52 @@ class Locations {
 	process(section) {
 
 		return section.load(this.request)
-			.then(function(contents) {
+			.then(function (contents) {
 				var completed = new defer();
-				var locations = this.parse(contents, section.cfiBase);
+				var { locations, locationsMeta } = this.parseWords(contents, section.cfiBase);
 				this._locations = this._locations.concat(locations);
-
+				console.log({ locations, locationsMeta });
 				section.unload();
-
-				this.processingTimeout = setTimeout(() => completed.resolve(locations), this.pause);
+				localStorage.setItem("internal", JSON.stringify(locationsMeta));
+				this.processingTimeout = setTimeout(() => completed.resolve(locationsMeta), this.pause);
 				return completed.promise;
 			}.bind(this));
 
+	}
+
+	parseWords(contents, cfiBase, chars) {
+		var locations = [];
+		var locationsMeta = [];
+		var range;
+		var doc = contents.ownerDocument;
+		var body = qs(doc, "body");
+		var parser = function (node) {
+			var pos = 0;
+
+			if (node.textContent.trim().length === 0) {
+				return false; // continue
+			}
+
+			var split = node.textContent.split(/(\S+\s+)/).filter(function (n) { return n; });
+
+			split.forEach(word => {
+				range = this.createRange();
+				range.startContainer = node;
+				range.startOffset = pos;
+				const endPos = pos + word.length;
+				range.endContainer = node;
+				range.endOffset = pos + word.length;
+				let cfi = new EpubCFI(range, cfiBase).toString();
+				locationsMeta.push({ cfi, word });
+				locations.push(cfi);
+				pos = endPos;
+			});
+
+		};
+
+		sprint(body, parser.bind(this));
+
+		return { locations, locationsMeta };
 	}
 
 	parse(contents, cfiBase, chars) {
